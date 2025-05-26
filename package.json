@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "live-server . --port=5500 --open --host=localhost"
+    "start": "live-server . --port=5500 --open --host=0.0.0.0"
   },
   "author": "",
   "license": "ISC",

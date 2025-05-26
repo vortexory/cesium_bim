@@ -8,7 +8,6 @@
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.128/Build/Cesium/Cesium.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.128/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
-        html,
         body,
         #cesiumContainer {
             width: 100%;
@@ -17,16 +16,139 @@
             padding: 0;
             overflow: hidden;
         }
+        
+        #loadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+            transition: opacity 0.5s ease-in-out;
+        }
+        
+        .spinner {
+            width: 80px;
+            height: 80px;
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        .loading-text {
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            color: #333;
+            margin-top: 10px;
+        }
+        
+        .loading-progress {
+            width: 300px;
+            height: 10px;
+            background-color: #f3f3f3;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #3498db;
+            transition: width 0.3s ease;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 
 <body>
     <div id="cesiumContainer"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading 3D Models</div>
+        <div class="loading-progress">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div id="loadingStatus" class="loading-text" style="font-size: 16px;">Initializing...</div>
+    </div>
+    
+    <!-- External scripts -->
+    <script src="help-modal.js"></script>
+    
     <script>
-        const localServer = `http://localhost:5500`; // Adjust this to your local server URL if needed
+        // Create a global variable to hold the viewer
+        var viewer;
+        
+        const localServer = `http://127.0.0.1:5500`; // Adjust this to your local server URL if needed
+        
+        // Loading indicator elements
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const progressBar = document.getElementById('progressBar');
+        const loadingStatus = document.getElementById('loadingStatus');
+        
+        // Track loading progress
+        let totalModels = 0;
+        let loadedModels = 0;
+        
+        // Update loading progress
+        function updateProgress(status, percent) {
+            if (percent !== undefined) {
+                progressBar.style.width = `${percent}%`;
+            }
+            
+            if (status) {
+                loadingStatus.textContent = status;
+            }
+        }
+        
+        // Hide loading screen
+        function hideLoading() {
+            loadingOverlay.classList.add('fade-out');
+            setTimeout(() => {
+                loadingOverlay.style.display = 'none';
+            }, 500);
+        }
+        
         (async () => {
+            try {
+                updateProgress("Setting up viewer...");
+                
+                // Create a brighter scene by setting a white skybox
+                const skyBoxOptions = {
+                    sources: {
+                        positiveX: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+                        negativeX: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+                        positiveY: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+                        negativeY: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+                        positiveZ: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+                        negativeZ: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='
+                    }
+                };
+                
+                updateProgress("Loading base map...", 10);
+                
             const esri = await Cesium.ArcGisMapServerImageryProvider.fromUrl('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer');
-            const viewer = new Cesium.Viewer('cesiumContainer', {
+                
+                // Initialize the viewer and assign to global variable
+                viewer = new Cesium.Viewer('cesiumContainer', {
                 timeline: false,
                 animation: false,
                 geocoder: false,
@@ -35,47 +157,599 @@
                 navigationHelpButton: false,
                 baseLayerPicker: false,
                 fullscreenButton: false,
-                skyBox: false,
+                    skyBox: new Cesium.SkyBox(skyBoxOptions),
                 baseLayer: Cesium.ImageryLayer.fromProviderAsync(esri),
-            });
-            viewer.scene.globe.translucency.enabled = true;
-            viewer.scene.globe.translucency.frontFaceAlphaByDistance = new Cesium.NearFarScalar(0, 0.5, 400.0, 1)
-            viewer.scene.globe.translucency.frontFaceAlpha = 0.8;
-            viewer.scene.globe.translucency.backFaceAlpha = 0.8;
-            viewer.scene.globe.depthTestAgainstTerrain = true;
-            viewer.scene.globe.baseColor = Cesium.Color.GRAY;
+                    shadows: false,
+                    terrainShadows: Cesium.ShadowMode.DISABLED,
+                    shouldAnimate: false,
+                    requestRenderMode: true,
+                    maximumRenderTimeChange: Infinity,
+                    msaaSamples: 4,
+                    useSunLighting: true,
+                    terrain: Cesium.Terrain.fromWorldTerrain({
+                        requestWaterMask: true,
+                        requestVertexNormals: true
+                    }),
+                    // Disable InfoBox to prevent iframe errors
+                    infoBox: false,
+                    selectionIndicator: false
+                });
+                
+                // Make the viewer object definitely global
+                window.viewer = viewer;
+                document.viewer = viewer;
+                console.log('Viewer successfully initialized and set globally');
+                
+                // Completely remove any iframes that Cesium might create
+                function removeAllIframes() {
+                    // Find and remove all iframes to prevent sandbox and message port errors
+                    const iframes = document.querySelectorAll('iframe');
+                    iframes.forEach(iframe => {
+                        console.log('Removing iframe to prevent errors');
+                        iframe.parentNode.removeChild(iframe);
+                    });
+                }
+                
+                // Run immediately and periodically to catch any new iframes
+                removeAllIframes();
+                setInterval(removeAllIframes, 2000);
+                
+                updateProgress("Configuring scene...", 20);
+                
+                // Set the background color to white
+                viewer.scene.backgroundColor = Cesium.Color.WHITE;
+                
+                // Configure shadow settings based on reference code
+                viewer.shadowMap.softShadows = true;
+                viewer.shadowMap.size = 512; // Optimized size for better performance
+                viewer.shadowMap.darkness = 0.05; // Reduced darkness for brighter shadows
+                viewer.shadowMap.maximumDistance = 10000.0; // Maximum shadow distance
+                viewer.shadowMap.normalOffset = true; // Enable normal offset for softer shadows
+                viewer.shadowMap.fadeOutDistance = 10000.0; // Distance shadows begin to fade out
+                viewer.shadowMap.softShadowBlur = 20.0; // Increased blur for softer shadows
+                viewer.shadowMap.bias = 0.00005; // Reduced bias for better shadow quality
 
+                // Add global ambient light to soften shadows
+                viewer.scene.ambientLight = new Cesium.Color(1.6, 1.5, 1.4, 1.0); // Warmer, brighter ambient light
+                
+                // Ensure terrain receives and casts shadows
+                viewer.terrainShadows = Cesium.ShadowMode.ENABLED;
+                if (viewer.scene.terrain) {
+                    viewer.scene.terrain.shadows = Cesium.ShadowMode.ENABLED;
+                }
+                
+                // Enable normal mapping and depth testing for better shadow rendering
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.depthTestAgainstTerrain = true;
+                viewer.scene.globe.showGroundAtmosphere = true;
+                
+                // Add warmer ambient light to the scene
+                viewer.scene.globe.ambientLight = new Cesium.Color(1.6, 1.5, 1.4, 1.0);
+                viewer.scene.globe.lambertDiffuseMultiplier = 5.0; // Increased for smoother lighting
+                
+                // Configure globe for warmer lighting
+                viewer.scene.globe.baseColor = new Cesium.Color(1.1, 1.05, 1.0, 1.0); // Slightly warm ground color
+                
+                // Enable SSAO for better depth perception
+                viewer.scene.postProcessStages.fxaa.enabled = true;
+                viewer.scene.postProcessStages.ambientOcclusion.enabled = true;
+                viewer.scene.postProcessStages.ambientOcclusion.intensity = 0.3; // Subtle ambient occlusion
+                
+                updateProgress("Setting up lighting...", 30);
+                
+                // Set base sun lighting with stronger noon settings
+                viewer.scene.sun = new Cesium.Sun({
+                    glowFactor: 1.5,
+                    size: 30 // Larger sun for brighter noon appearance
+                });
+                
+                // Fix the sun position to direct noon (directly overhead)
+                const julianDate = new Cesium.JulianDate.fromIso8601("2020-06-21T12:00:00Z"); // Summer solstice noon
+                viewer.clock.currentTime = julianDate;
+                viewer.clock.multiplier = 0; // Stop time to fix the sun position
+                viewer.clock.shouldAnimate = false; // Prevent time from advancing
+                
+                // Configure sun directional light for strong noon light
+                viewer.scene.light = new Cesium.DirectionalLight({
+                    direction: new Cesium.Cartesian3(0.0, 0.0, -1.0), // Directly overhead
+                    color: new Cesium.Color(1.0, 1.0, 1.0, 1.0), // Pure white for noon
+                    intensity: 4.0 // Strong noon sunlight
+                });
+                
+                // Add additional lights from 4 sides without shadows using entity-based approach
+                const addSideLights = () => {
+                    console.log('Adding 4 supplementary fill lights from different sides');
+                    
+                    // Create a small position offset for each light
+                    const modelCenter = Cesium.Cartesian3.fromDegrees(modelData[0].lon, modelData[0].lat, modelData[0].height + 500);
+                    
+                    // North light (from +Y direction)
+                    viewer.entities.add({
+                        position: modelCenter,
+                        name: "North Fill Light",
+                        point: {
+                            color: new Cesium.Color(1.0, 1.0, 1.0, 1.0), // Pure white to match sun
+                            pixelSize: 1, // Almost invisible point
+                            show: false // Hide the point visualization
+                        },
+                        properties: {
+                            isLight: true,
+                            intensity: 2.0 // Match sun's intensity
+                        }
+                    });
+                    
+                    // South light (from -Y direction)
+                    viewer.entities.add({
+                        position: modelCenter,
+                        name: "South Fill Light",
+                        point: {
+                            color: new Cesium.Color(1.0, 1.0, 1.0, 1.0), // Pure white to match sun
+                            pixelSize: 1, // Almost invisible point
+                            show: false // Hide the point visualization
+                        },
+                        properties: {
+                            isLight: true,
+                            intensity: 2.0 // Match sun's intensity
+                        }
+                    });
+                    
+                    // East light (from +X direction)
+                    viewer.entities.add({
+                        position: modelCenter,
+                        name: "East Fill Light",
+                        point: {
+                            color: new Cesium.Color(1.0, 1.0, 1.0, 1.0), // Pure white to match sun
+                            pixelSize: 1, // Almost invisible point
+                            show: false // Hide the point visualization
+                        },
+                        properties: {
+                            isLight: true,
+                            intensity: 2.0 // Match sun's intensity
+                        }
+                    });
+                    
+                    // West light (from -X direction)
+                    viewer.entities.add({
+                        position: modelCenter,
+                        name: "West Fill Light",
+                        point: {
+                            color: new Cesium.Color(1.0, 1.0, 1.0, 1.0), // Pure white to match sun
+                            pixelSize: 1, // Almost invisible point
+                            show: false // Hide the point visualization
+                        },
+                        properties: {
+                            isLight: true,
+                            intensity: 2.0 // Match sun's intensity
+                        }
+                    });
+                    
+                    console.log('Added 4 fill lights as entities with matching sun intensity');
+                };
+                
+                // Initialize the additional lights after models are loaded
+                updateProgress("Adding supplementary lighting...", 90);
+                
+                // Enable HDR for better light distribution and reflections
+                viewer.scene.highDynamicRange = true;
+                
+                // Create a light time for noon
+                const noonTime = Cesium.JulianDate.fromIso8601("2020-06-21T12:00:00Z"); // Summer solstice noon
+                viewer.clock.currentTime = noonTime;
+                viewer.clock.multiplier = 0; // Stop time
+                viewer.clock.shouldAnimate = false; // Prevent animation
+                
+                // Configure globe for proper noon lighting
+                viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED;
+                viewer.scene.globe.terrainExaggeration = 1.0; // Remove terrain exaggeration
+                
+                // Enable terrain shadows on scene
+                viewer.scene.shadowMap.enabled = true;
+                viewer.scene.globe.castShadows = true;
+                viewer.scene.globe.receiveShadows = true;
+                
+                // Configure shadow map for brighter and blurrier shadows
+                if (viewer.scene.shadowMap) {
+                    viewer.scene.shadowMap.glowEdge = true; // Enable glow edge effect
+                    viewer.scene.shadowMap.glowEdgeIntensity = 0.3; // Subtle glow intensity
+                    viewer.scene.shadowMap.glowEdgeColor = new Cesium.Color(1.0, 1.0, 1.0, 0.2); // Soft white glow
+                    viewer.scene.shadowMap.glowEdgeWidth = 2.0; // Width of the glow edge
+                    viewer.scene.shadowMap.glowEdgeBlur = 1.5; // Blur amount for the glow
+                    viewer.scene.shadowMap.softShadows = true; // Enable soft shadows
+                    viewer.scene.shadowMap.softShadowBlur = 50.0; // Increased blur for softer shadows
+                    viewer.scene.shadowMap.softShadowBlurSize = 8.0; // Increased blur size for smoother edges
+                    viewer.scene.shadowMap.softShadowBlurQuality = 2.0; // High quality blur
+                    viewer.scene.shadowMap.softShadowBlurRadius = 4.0; // Increased blur radius for smoother edges
+                    viewer.scene.shadowMap.opacity = 0.2; // Reduced shadow opacity for lighter shadows
+                    viewer.scene.shadowMap.darkness = 0.80; // Reduced darkness for brighter shadows
+                    viewer.scene.shadowMap.bias = 0.0005; // Reduced bias for better shadow quality
+                    viewer.scene.shadowMap.size = 2048; // Reduced size for better performance while maintaining quality
+                }
+                
+                // Add event listener for camera movement and shadow updates
+                viewer.scene.preRender.addEventListener(function(scene, time) {
+                    // Fix time to noon
+                    viewer.clock.currentTime = noonTime;
+                    
+                    // Make sure shadows are updated on each frame
+                    if (scene.shadowMap) {
+                        scene.shadowMap.enabled = true;
+                    }
+                    
+                    // Maintain noon sun position - ensure directional light stays overhead
+                    viewer.scene.light.direction = new Cesium.Cartesian3(0.0, 0.0, -1.0);
+                    
+                    // Force scene update
+                    viewer.scene.requestRender();
+                });
+                
+                // Add ambient illumination for better noon lighting
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.lambertDiffuseMultiplier = 4.5; // Increased for brighter noon lighting
+                
+                updateProgress("Loading model data...", 40);
 
             const response = await fetch(`${localServer}/models.json`);
             if (!response.ok) {
+                    updateProgress("Error loading models.json", 100);
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const modelData = await response.json();
 
-            const center = Cesium.Cartesian3.fromDegrees(modelData[0].lon, modelData[0].lat, modelData[0].height + 1000); // Adjust height for better view
+                updateProgress("Preparing models...", 50);
+                
+                totalModels = modelData.length;
+                
+                const center = Cesium.Cartesian3.fromDegrees(modelData[0].lon, modelData[0].lat, modelData[0].height + 1000);
             viewer.camera.flyTo({
                 destination: center,
-                duration: 2
-            });
-
-
-            modelData.forEach(item => {
-                const position = Cesium.Cartesian3.fromDegrees(item.lon, item.lat, item.height);
-                const heading = Cesium.Math.toRadians(90 + item.heading);
-                const pitch = 0;
-                const roll = 0;
-                const hpr = new Cesium.HeadingPitchRoll(heading, pitch, roll);
-                const orientation = Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
-                
-                viewer.entities.add({
-                    position: position,
-                    orientation: orientation,
-                    model: {
-                        uri: `${localServer}/glb/${item.filename}`,
+                    duration: 2,
+                    complete: function() {
+                        // Force terrain shadows to update after camera movement
+                        if (viewer.shadowMap) {
+                            viewer.shadowMap.enabled = true;
+                            viewer.shadowMap._shadowsEnabled = true;
+                            viewer.scene.requestRender();
+                        }
                     }
                 });
-            });
+    
+                // Create a simpler model loading process
+                for (let i = 0; i < modelData.length; i++) {
+                    const item = modelData[i];
+                    const position = Cesium.Cartesian3.fromDegrees(item.lon, item.lat, item.height);
+                    const heading = Cesium.Math.toRadians(90 + item.heading);
+                    const pitch = 0;
+                    const roll = 0;
+                    const hpr = new Cesium.HeadingPitchRoll(heading, pitch, roll);
+                    const orientation = Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
+                    
+                    // Create an entity
+                    const entity = viewer.entities.add({
+                        position: position,
+                        orientation: orientation,
+                        model: {
+                            uri: `${localServer}/glb/${item.filename}`,
+                            shadows: Cesium.ShadowMode.ENABLED,
+                            color: new Cesium.Color(1.4, 1.4, 1.4, 1.0),
+                            colorBlendMode: Cesium.ColorBlendMode.HIGHLIGHT,
+                            colorBlendAmount: 0.2,
+                            maximumScale: 1.0,
+                            minimumPixelSize: 64,
+                            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 3000.0),
+                            runAnimations: false,
+                            imageBasedLightingFactor: new Cesium.Cartesian2(2.0, 2.0), // Increased for better reflections
+                            luminanceAtZenith: 3.0,
+                            lightColor: new Cesium.Color(1.4, 1.3, 1.2, 1.0),
+                            silhouetteSize: 2.0,
+                            silhouetteColor: new Cesium.Color(0, 0, 0, 0.07),
+                            specular: new Cesium.Cartesian3(0.8, 0.8, 0.8), // Increased specular for more reflection
+                            shininess: 100.0, // Increased shininess for sharper reflections
+                            backFaceCulling: false,
+                            showOutline: true,
+                            outlineColor: new Cesium.Color(0, 0, 0, 0.07),
+                            outlineWidth: 2.5,
+                            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+                            silhouetteSizeByDistance: new Cesium.NearFarScalar(0, 2.0, 3000, 2.0),
+                            // Add reflection properties
+                            reflectionIntensity: 0.8, // Strong reflection
+                            reflectionRoughness: 0.2, // Smooth reflection
+                            reflectionMetallic: 0.8, // Metallic appearance
+                            reflectionEnvironmentMap: true, // Enable environment map reflections
+                            reflectionEnvironmentMapIntensity: 0.8 // Environment map reflection strength
+                        }
+                    });
 
+                    // Add model load event handler to analyze colors
+                    viewer.scene.globe.tileLoadProgressEvent.addEventListener(function() {
+                        if (entity.model && entity.model.ready) {
+                            const modelGraphics = entity.model;
+                            if (modelGraphics) {
+                                // Create an even warmer, brighter version of the base color
+                                const baseColor = modelGraphics.color || Cesium.Color.WHITE;
+                                const warmerColor = new Cesium.Color(
+                                    Math.min(baseColor.red * 1.4, 1.0),
+                                    Math.min(baseColor.green * 1.3, 1.0),
+                                    Math.min(baseColor.blue * 1.2, 1.0),
+                                    1.0
+                                );
+                                
+                                // Update the entity's colors and reflection properties
+                                modelGraphics.color = warmerColor;
+                                modelGraphics.outlineColor = new Cesium.Color(0, 0, 0, 0.07);
+                                modelGraphics.silhouetteColor = new Cesium.Color(0, 0, 0, 0.07);
+                                modelGraphics.outlineWidth = 2.5;
+                                modelGraphics.silhouetteSize = 2.0;
+                                
+                                // Enhance reflection properties
+                                modelGraphics.specular = new Cesium.Cartesian3(0.8, 0.8, 0.8);
+                                modelGraphics.shininess = 100.0;
+                                modelGraphics.reflectionIntensity = 0.8;
+                                modelGraphics.reflectionRoughness = 0.2;
+                                modelGraphics.reflectionMetallic = 0.8;
+                                modelGraphics.reflectionEnvironmentMap = true;
+                                modelGraphics.reflectionEnvironmentMapIntensity = 0.8;
+                                
+                                // Log the color information
+                                console.log(`Model ${item.filename} colors:`, {
+                                    baseColor: baseColor.toCssColorString(),
+                                    warmerColor: warmerColor.toCssColorString(),
+                                    edgeColor: 'rgba(0, 0, 0, 0.07)',
+                                    reflectionProperties: {
+                                        intensity: 0.8,
+                                        roughness: 0.2,
+                                        metallic: 0.8
+                                    }
+                                });
+                            }
+                        }
+                    });
+                    
+                    // Simulate progress updates
+                    if (i % Math.max(1, Math.floor(modelData.length / 20)) === 0 || i === modelData.length - 1) {
+                        const percent = Math.min(50 + Math.round(((i + 1) / totalModels) * 50), 99);
+                        updateProgress(`Loading models (${i + 1}/${totalModels})`, percent);
+                        // Small delay to allow UI to update
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+                
+                // Update scene lighting for brighter appearance while keeping shadows
+                viewer.scene.light = new Cesium.DirectionalLight({
+                    direction: new Cesium.Cartesian3(0.0, 0.0, -1.0),
+                    color: new Cesium.Color(1.6, 1.5, 1.4, 1.0), // Warmer light color
+                    intensity: 2.5
+                });
+
+                // Add stronger ambient light for better overall brightness
+                viewer.scene.ambientLight = new Cesium.Color(1.6, 1.5, 1.4, 1.0);
+
+                // Adjust globe lighting
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.lambertDiffuseMultiplier = 5.0; // Increased for smoother lighting
+                viewer.scene.globe.baseColor = new Cesium.Color(1.1, 1.05, 1.0, 1.0); // Slightly warm ground color
+
+                // Configure shadow settings for better quality
+                if (viewer.scene.shadowMap) {
+                    viewer.scene.shadowMap.enabled = true;
+                    viewer.scene.shadowMap.softShadows = true;
+                    viewer.scene.shadowMap.size = 2048; // High quality shadows
+                    viewer.scene.shadowMap.darkness = 0.3; // Lighter shadows
+                    viewer.scene.shadowMap.maximumDistance = 10000.0;
+                    viewer.scene.shadowMap.normalOffset = true;
+                    viewer.scene.shadowMap.fadeOutDistance = 10000.0;
+                    viewer.scene.shadowMap.softShadowBlur = 20.0;
+                    viewer.scene.shadowMap.bias = 0.00005;
+                }
+
+                // Enable HDR for better light distribution
+                viewer.scene.highDynamicRange = true;
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.depthTestAgainstTerrain = true;
+                
+                // Enable terrain shadows on scene
+                viewer.scene.shadowMap.enabled = true;
+                viewer.scene.globe.castShadows = true;
+                viewer.scene.globe.receiveShadows = true;
+                
+                // Configure shadow map for brighter and blurrier shadows
+                if (viewer.scene.shadowMap) {
+                    viewer.scene.shadowMap.glowEdge = true; // Enable glow edge effect
+                    viewer.scene.shadowMap.glowEdgeIntensity = 0.3; // Subtle glow intensity
+                    viewer.scene.shadowMap.glowEdgeColor = new Cesium.Color(1.0, 1.0, 1.0, 0.2); // Soft white glow
+                    viewer.scene.shadowMap.glowEdgeWidth = 2.0; // Width of the glow edge
+                    viewer.scene.shadowMap.glowEdgeBlur = 1.5; // Blur amount for the glow
+                    viewer.scene.shadowMap.softShadows = true; // Enable soft shadows
+                    viewer.scene.shadowMap.softShadowBlur = 50.0; // Increased blur for softer shadows
+                    viewer.scene.shadowMap.softShadowBlurSize = 8.0; // Increased blur size for smoother edges
+                    viewer.scene.shadowMap.softShadowBlurQuality = 2.0; // High quality blur
+                    viewer.scene.shadowMap.softShadowBlurRadius = 4.0; // Increased blur radius for smoother edges
+                    viewer.scene.shadowMap.opacity = 0.2; // Reduced shadow opacity for lighter shadows
+                    viewer.scene.shadowMap.darkness = 0.80; // Reduced darkness for brighter shadows
+                    viewer.scene.shadowMap.bias = 0.0005; // Reduced bias for better shadow quality
+                    viewer.scene.shadowMap.size = 2048; // Reduced size for better performance while maintaining quality
+                }
+                
+                // Add event listener for camera movement and shadow updates
+                viewer.scene.preRender.addEventListener(function(scene, time) {
+                    // Fix time to noon
+                    viewer.clock.currentTime = noonTime;
+                    
+                    // Make sure shadows are updated on each frame
+                    if (scene.shadowMap) {
+                        scene.shadowMap.enabled = true;
+                    }
+                    
+                    // Maintain noon sun position - ensure directional light stays overhead
+                    viewer.scene.light.direction = new Cesium.Cartesian3(0.0, 0.0, -1.0);
+                    
+                    // Force scene update
+                    viewer.scene.requestRender();
+                });
+                
+                // Add ambient illumination for better noon lighting
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.lambertDiffuseMultiplier = 4.5; // Increased for brighter noon lighting
+                
+                updateProgress("Applying final lighting...", 99);
+                
+                // Apply balanced lighting to all entities
+                viewer.entities.values.forEach(entity => {
+                    if (entity.model) {
+                        // Set balanced lighting parameters for models under noon light
+                        entity.model.imageBasedLightingFactor = new Cesium.Cartesian2(2.0, 2.0);
+                        entity.model.luminanceAtZenith = 3.0;
+                        
+                        // Set model color to warm white for noon lighting
+                        entity.model.color = new Cesium.Color(1.6, 1.5, 1.4, 1.0);
+                        
+                        // Add enhanced reflection properties
+                        if (entity.model.specular !== undefined) {
+                            entity.model.specular = new Cesium.Cartesian3(0.8, 0.8, 0.8);
+                            entity.model.shininess = 100.0;
+                            entity.model.reflectionIntensity = 0.8;
+                            entity.model.reflectionRoughness = 0.2;
+                            entity.model.reflectionMetallic = 0.8;
+                            entity.model.reflectionEnvironmentMap = true;
+                            entity.model.reflectionEnvironmentMapIntensity = 0.8;
+                        }
+                        
+                        // Apply warm light color with increased brightness
+                        if (entity.model.lightColor) {
+                            entity.model.lightColor = new Cesium.Color(1.6, 1.5, 1.4, 1.0);
+                        }
+                        
+                        // Keep backface culling for performance while maintaining quality
+                        if (entity.model.backFaceCulling !== undefined) {
+                            entity.model.backFaceCulling = false;
+                        }
+                        
+                        // Apply the same lighting parameters to all models
+                        entity.model.luminanceAtZenith = 3.0;
+                        entity.model.imageBasedLightingFactor = new Cesium.Cartesian2(2.0, 2.0);
+                        
+                        // Ensure shadows are enabled and soft
+                        if (entity.model.shadows !== undefined) {
+                            entity.model.shadows = Cesium.ShadowMode.ENABLED;
+                        }
+
+                        // Add custom shader for better reflection control
+                        if (entity.model.customShader === undefined) {
+                            entity.model.customShader = new Cesium.CustomShader({
+                                lightingModel: Cesium.LightingModel.PBR,
+                                uniforms: {
+                                    ambientIntensity: 1.6,
+                                    diffuseIntensity: 1.5,
+                                    specularIntensity: 0.8, // Increased specular intensity
+                                    contrast: 1.4,
+                                    shadowSoftness: 20.0,
+                                    shadowDarkness: 0.05,
+                                    warmFactor: 1.2,
+                                    reflectionIntensity: 0.8, // Added reflection intensity
+                                    reflectionRoughness: 0.2, // Added reflection roughness
+                                    reflectionMetallic: 0.8 // Added metallic factor
+                                }
+                            });
+                        }
+
+                        // Add material properties for enhanced reflections
+                        if (entity.model.materialProperties === undefined) {
+                            entity.model.materialProperties = {
+                                diffuse: new Cesium.Cartesian3(1.6, 1.5, 1.4),
+                                specular: new Cesium.Cartesian3(0.8, 0.8, 0.8), // Increased specular
+                                shininess: 100.0, // Increased shininess
+                                ambient: new Cesium.Cartesian3(1.6, 1.5, 1.4),
+                                contrast: 1.4,
+                                shadowSoftness: 20.0,
+                                shadowDarkness: 0.05,
+                                warmFactor: 1.2,
+                                reflectionIntensity: 0.8, // Added reflection intensity
+                                reflectionRoughness: 0.2, // Added reflection roughness
+                                reflectionMetallic: 0.8 // Added metallic factor
+                            };
+                        }
+
+                        // Add color correction for better contrast
+                        if (entity.model.colorBlendMode === undefined) {
+                            entity.model.colorBlendMode = Cesium.ColorBlendMode.HIGHLIGHT;
+                            entity.model.colorBlendAmount = 0.4; // Increased color blend for contrast
+                        }
+                    }
+                });
+                
+                // Initialize the side lights after all models are loaded
+                addSideLights();
+                
+                // Set up ambient occlusion for better depth perception
+                if (viewer.scene.postProcessStages.ambientOcclusion) {
+                    viewer.scene.postProcessStages.ambientOcclusion.enabled = true;
+                    viewer.scene.postProcessStages.ambientOcclusion.intensity = 0.3;
+                    viewer.scene.postProcessStages.ambientOcclusion.bias = 0.1;
+                    viewer.scene.postProcessStages.ambientOcclusion.lengthCap = 0.03;
+                    viewer.scene.postProcessStages.ambientOcclusion.stepSize = 1.0;
+                }
+                
+                // Fix sandbox iframe issues
+                if (viewer.infoBox) {
+                    try {
+                        // Set sandbox attributes to allow necessary permissions
+                        viewer.infoBox.frame.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms');
+                        
+                        // Prevent credit container visibility issues
+                        if (viewer.scene.frameState && 
+                            viewer.scene.frameState.creditDisplay && 
+                            viewer.scene.frameState.creditDisplay.container) {
+                            viewer.scene.frameState.creditDisplay.container.style.visibility = 'visible';
+                        }
+                        
+                        // Disable the infoBox to avoid iframe issues
+                        viewer.infoBox.enabled = false;
+                        viewer.selectionIndicator.enabled = false;
+                    } catch (e) {
+                        console.warn('Could not adjust infoBox sandbox settings: ' + e);
+                    }
+                }
+                
+                // Ensure correct handling of message ports
+                try {
+                    // Disable content scripts in widget containers
+                    if (viewer._cesiumWidget) {
+                        if (viewer._cesiumWidget._creditContainer) {
+                            viewer._cesiumWidget._creditContainer.style.visibility = 'visible';
+                        }
+                        if (viewer._cesiumWidget.infoBox) {
+                            viewer._cesiumWidget.infoBox.frame.removeAttribute('srcdoc');
+                            viewer._cesiumWidget.infoBox.enabled = false;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Frame-related error handling failed: ' + e);
+                }
+                
+                // Create an empty element to preload the environment maps
+                const preloadElement = document.createElement('div');
+                preloadElement.style.display = 'none';
+                preloadElement.id = 'preloadContainer';
+                document.body.appendChild(preloadElement);
+                
+                // Wait a moment to ensure everything is rendered
+                setTimeout(() => {
+                    updateProgress("Rendering complete", 100);
+                    hideLoading();
+                    console.log('Loading complete');
+                }, 1000);
+            } catch (error) {
+                console.error("Error loading scene:", error);
+                updateProgress("Error loading scene: " + error.message, 100);
+                setTimeout(hideLoading, 3000);
+            }
+            
+            // Add an event listener to hide loading if taking too long
+            setTimeout(() => {
+                if (loadingOverlay.style.display !== 'none') {
+                    updateProgress("Loading complete (some models may still be rendering)", 100);
+                    hideLoading();
+                }
+            }, 15000); // Safety timeout after 15 seconds
         })();
     </script>
 </body>

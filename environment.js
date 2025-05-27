@@ -23,7 +23,7 @@ export async function configureCommonEnvironment(viewer) {
 
     // Basic terrain configuration
     viewer.scene.globe.enableLighting = true;
-    viewer.scene.globe.shadows = Cesium.ShadowMode.DISABLED; // Disabled terrain shadows
+    viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED; // Disabled terrain shadows
     viewer.scene.globe.terrainExaggeration = 12.0;
     viewer.scene.globe.terrainExaggerationRelativeHeight = 0.0;
 
@@ -34,18 +34,20 @@ export async function configureCommonEnvironment(viewer) {
     });
     viewer.scene.light = noonLight;
     viewer.scene.globe.ambientOcclusionOnly = true;
-    viewer.scene.globe.ambientOcclusionRadius = 0.1; // Reduced for more concentrated shadows
-    viewer.scene.globe.ambientOcclusionIntensity = 0.8; // Increased for less transparent shadows
+    viewer.scene.globe.ambientOcclusionRadius = 1.0; // Reduced for more concentrated shadows
+    viewer.scene.globe.ambientOcclusionIntensity = 0.2; // Increased for less transparent shadows
 
     // Enhanced shadow settings for curve definition
+    viewer.scene.globe.enableSoftShadows = true;
+    viewer.scene.globe.shadowMapSoftness = 1.0; // Increased for softer shadows
+    viewer.scene.globe.shadowMapBias = 0.001; // Small bias to prevent shadow acne
     viewer.scene.globe.shadowMapSize = 4096; // Increased for better quality
-    viewer.scene.globe.shadowMapSoftness = 0.03; // Even sharper shadows
-    viewer.scene.globe.shadowMapBias = 0.0001;
+    
 
     // Enhanced curve visualization settings
     viewer.scene.globe.baseColor = new Cesium.Color(0.1, 0.1, 0.1, 1.0); // Darker base color
     viewer.scene.globe.depthTestAgainstTerrain = true;
-    viewer.scene.globe.atmosphereBrightnessShift = 0.02; // Reduced for darker shadows
+    viewer.scene.globe.atmosphereBrightnessShift = 0.1; // Reduced for darker shadows
     viewer.scene.globe.atmosphereSaturationShift = 1.0; // Increased for more contrast
 
     // Enhanced normal mapping for curves
@@ -79,72 +81,4 @@ export function addSupplementaryLighting(viewer, modelCenter) {
             }
         });
     });
-}
-
-// Function to configure model edge highlighting
-export function configureModelEdgeHighlighting(entity) {
-    if (entity.model) {
-        // Set up the model with clean boundary edge highlighting
-        entity.model.silhouetteColor = new Cesium.Color(0.9, 0.9, 0.9, 1.0); // Bright grey color
-        entity.model.silhouetteSize = 0.5; // Slightly thicker outline for better visibility
-        
-        // Configure the model's appearance
-        entity.model.color = new Cesium.Color(1.0, 1.0, 1.0, 1.0);
-        entity.model.colorBlendMode = Cesium.ColorBlendMode.DISABLED;
-        
-        // Enable primitive outline with clean boundary settings
-        entity.model.silhouetteSizeByDistance = new Cesium.NearFarScalar(
-            0.0,    // Near distance
-            0.2,    // Near size
-            2000.0, // Far distance
-            0.1     // Far size (same as near for consistency)
-        );
-        
-        // Configure the model's material for clean boundary edges
-        entity.model.silhouetteAlpha = 1.0; // Full opacity for the outline
-        entity.model.silhouetteOnly = true; // Show only the outline
-        
-        // Additional settings to reduce surface noise
-        entity.model.silhouetteSize = 0.5;
-        entity.model.silhouetteColor = new Cesium.Color(0.9, 0.9, 0.9, 1.0); // Bright grey color
-        entity.model.silhouetteAlpha = 1.0;
-        
-        // Configure model for clean edge detection
-        entity.model.silhouetteSize = 1.0;
-        entity.model.silhouetteColor = new Cesium.Color(0.9, 0.9, 0.9, 1.0); // Bright grey color
-        entity.model.silhouetteAlpha = 1.0;
-        
-        // Remove any custom post-processing stages
-        if (entity.model.postProcessStages) {
-            entity.model.postProcessStages.removeAll();
-        }
-    }
-}
-
-// Function to configure viewer for edge highlighting
-export function configureViewerForEdgeHighlighting(viewer) {
-    // Disable depth testing to ensure boundary edges are visible
-    viewer.scene.globe.depthTestAgainstTerrain = false;
-    
-    // Disable shadows for cleaner boundary detection
-    viewer.scene.globe.shadows = Cesium.ShadowMode.DISABLED;
-    viewer.scene.globe.shadowMapSize = 4096;
-    viewer.scene.globe.shadowMapSoftness = 0.1;
-    
-    // Disable lighting for better boundary visibility
-    viewer.scene.globe.enableLighting = false;
-    
-    // Disable FXAA to prevent edge smearing
-    viewer.scene.postProcessStages.fxaa.enabled = false;
-    
-    // Configure scene for clean edge rendering
-    viewer.scene.globe.enableLighting = false;
-    viewer.scene.globe.normalMap = false;
-    viewer.scene.globe.atmosphereBrightnessShift = 0.0;
-    viewer.scene.globe.atmosphereSaturationShift = 0.0;
-    
-    // Disable any post-processing that might affect edges
-    viewer.scene.globe.ambientOcclusionOnly = false;
-    viewer.scene.globe.ambientOcclusionRadius = 0.0;
-    viewer.scene.globe.ambientOcclusionIntensity = 0.0;
 } 

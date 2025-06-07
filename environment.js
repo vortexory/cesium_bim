@@ -10,7 +10,7 @@ export function getViewerOptions() {
         baseLayerPicker: false,
         fullscreenButton: false,
         skyBox: false,
-        shadows: true,
+        shadows: false,
         terrainShadows: Cesium.ShadowMode.ENABLED,
         terrainProvider: new Cesium.EllipsoidTerrainProvider()
     };
@@ -23,7 +23,7 @@ export async function configureCommonEnvironment(viewer) {
 
     // Basic terrain configuration
     viewer.scene.globe.enableLighting = true;
-    viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED; // Disabled terrain shadows
+    viewer.scene.globe.shadows = Cesium.ShadowMode.DISABLED; // Disable terrain shadows
     viewer.scene.globe.terrainExaggeration = 12.0;
     viewer.scene.globe.terrainExaggerationRelativeHeight = 0.0;
 

@@ -25,7 +25,10 @@
     <script type="module">
         import { configureCommonEnvironment, getViewerOptions } from './environment.js';
         
-        const localServer = `https://cesium-bim.vercel.app/`; // Adjust this to your local server URL if needed
+        // Set your Cesium ion access token here
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6NTc3MzMsImlhdCI6MTYyMjY0NjQ5NH0.XcKpgANiY19MC4bdFUXMVEBToBmqS8kuYpUlxJHYZxY';
+        
+        const localServer = `http://127.0.0.1:5500`; // Adjust this to your local server URL if needed
         (async () => {
             const viewer = new Cesium.Viewer('cesiumContainer', getViewerOptions());
             await configureCommonEnvironment(viewer);
